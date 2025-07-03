@@ -11,11 +11,10 @@ from dual_clus import draw_dual_colored_graph
 def weighted_imbalance_perturbation(G, edge_weights=None, lap_labels=None, num_nodes_per_cluster=3,
                                     keep=2, min_frac=0.7, weight_attr='weight', nodes_to_perturb=None, **kwargs):
     """
-    Remove weaker edges from selected nodes, keeping at most `keep` strongest edges per node.
-    For each target node, edges with weight less than `min_frac * max_edge_weight` (for that node) 
-    are removed, as long as each endpoint's degree stays above `keep`.
-    If `nodes_to_perturb` is not provided, it selects up to `num_nodes_per_cluster` nodes per cluster (using `lap_labels`) 
-    that have exactly two relatively strong connections (≥ `min_frac` of their maximum edge weight).
+    * remove weaker edges from selected nodes, keeping at most 2 strongest edges per node.
+    * for each target node, edges with weight less than min_frac * max_edge_weight (node specific)
+        are removed, as long as each endpoint's degree stays above 2
+    * if nodes_to_perturb is not provided, select up to num_nodes_per_cluster nodes per cluster that have exactly two relatively strong connections
     """
     Gp = G.copy()
     # determine which nodes to perturb if not explicitly given
@@ -102,10 +101,10 @@ def weighted_imbalance_perturbation(G, edge_weights=None, lap_labels=None, num_n
 
 def perturbation_by_levels(G, contracted_edges, lap_labels, sig_labels, edge_weights=None, min_deg=2, print_stats=True, **kwargs):
     """
-    Iteratively remove edges that are not part of strong connections or provided 'contracted_edges'.
-    In each iteration, identify nodes with exactly two 'strong' incident edges (either in `contracted_edges` or connecting nodes within the same cluster in both labelings).
-    Remove other edges from those nodes if it can be done without dropping node degree below `min_deg`.
-    Repeat until no further changes occur.
+    * iteratively remove edges that are not part of strong connections or provided contr e
+    * each iteration, identify nodes with exactly two strong incident edges (either in contr e or connecting nodes within the same cluster in both labelings).
+    * remove other edges from those nodes if it can be done without dropping node degree below min deg
+    * repeat until convergence
     """
     Gp = G.copy()
     contracted_set = {tuple(sorted(e)) for e in contracted_edges}
@@ -177,8 +176,7 @@ def perturbation_by_levels(G, contracted_edges, lap_labels, sig_labels, edge_wei
 
 def random_edge_perturbation(G, fraction=0.1, min_deg=1, **kwargs):
     """
-    Randomly remove a fraction of edges from the graph.
-    Chooses approximately `fraction * 100%` of edges at random to delete, ensuring no node's degree falls below `min_deg`.
+    * randomly remove a fraction of edges from the graph while ensuring no node's degree falls below min.
     """
     Gp = G.copy()
     edges = list(Gp.edges())
@@ -195,9 +193,8 @@ def random_edge_perturbation(G, fraction=0.1, min_deg=1, **kwargs):
 
 def inter_cluster_perturbation(G, lap_labels, sig_labels, min_deg=1, **kwargs):
     """
-    Remove edges that connect nodes in different clusters.
-    Drops edges where the two endpoints do not share the same cluster label in both `lap_labels` and `sig_labels`.
-    Ensures no node's degree falls below `min_deg`.
+    drops edges where the two endpoints do not share the same cluster label in both lap and sig.
+    min deg cond
     """
     Gp = G.copy()
     for u, v in list(Gp.edges()):
@@ -208,9 +205,7 @@ def inter_cluster_perturbation(G, lap_labels, sig_labels, min_deg=1, **kwargs):
 
 def intra_cluster_perturbation(G, lap_labels, sig_labels, min_deg=1, **kwargs):
     """
-    Remove edges that connect nodes within the same cluster.
-    Drops edges where both `lap_labels` and `sig_labels` assign the same cluster to both endpoints.
-    Ensures no node's degree falls below `min_deg`.
+    remove edges where both lap and sig assign the same cluster to both endpoints with min deg cond
     """
     Gp = G.copy()
     for u, v in list(Gp.edges()):
@@ -221,8 +216,7 @@ def intra_cluster_perturbation(G, lap_labels, sig_labels, min_deg=1, **kwargs):
 
 def preserve_cycle_perturbation(G, contracted_edges, min_deg=2, **kwargs):
     """
-    Preserve a set of important edges (e.g., a Hamiltonian cycle) and remove other edges.
-    Only edges not in `contracted_edges` are considered for removal, and removals ensure node degrees stay >= `min_deg`.
+    preserve high sig edges
     """
     Gp = G.copy()
     important_set = {tuple(sorted(e)) for e in contracted_edges}
@@ -234,8 +228,7 @@ def preserve_cycle_perturbation(G, contracted_edges, min_deg=2, **kwargs):
 
 def break_cycle_perturbation(G, contracted_edges, min_deg=1, **kwargs):
     """
-    Remove a specified set of important edges (e.g., edges in a Hamiltonian cycle) from the graph.
-    Only edges in `contracted_edges` are removed, and removals ensure node degrees stay >= `min_deg` (to avoid isolating nodes entirely).
+    remove necessary edges (eg shortcuts)
     """
     Gp = G.copy()
     important_set = {tuple(sorted(e)) for e in contracted_edges}
@@ -247,8 +240,7 @@ def break_cycle_perturbation(G, contracted_edges, min_deg=1, **kwargs):
 
 def align_embeddings(G1, G2, vecs1, vecs2):
     """
-    Align eigenvector embeddings of two graphs by reordering to match common node indices.
-    Returns the eigenvector matrices for the common nodes in the order of `G1` and `G2`.
+    align embeddings for subspace angle calcualtion
     """
     nodes1 = np.array(list(G1.nodes()))
     nodes2 = np.array(list(G2.nodes()))
@@ -258,33 +250,20 @@ def align_embeddings(G1, G2, vecs1, vecs2):
     return vecs1[idx1], vecs2[idx2]
 
 def get_laplacian_subspace(G, k=5, normalized=True):
-    """
-    Compute the smallest k eigenvalues and corresponding eigenvectors of the Laplacian of graph G.
-    Returns eigenvalues (array) and eigenvectors (matrix) sorted in ascending order.
-    If `normalized` is True, uses the normalized Laplacian; otherwise uses the combinatorial Laplacian.
-    """
     L = nx.normalized_laplacian_matrix(G) if normalized else nx.laplacian_matrix(G)
     L = L.astype(np.float64)
     n = L.shape[0]
-    # ensure k is less than n (Laplacian has at least one zero eigenvalue)
+    # ensure k is less than n (laplacian has at least one zero eigenvalue)
     k = min(k, n - 1)
     vals, vecs = eigsh(L, k=k, which='SM')
     idx = np.argsort(vals)
     return vals[idx], vecs[:, idx]
 
 def max_principal_angle(X1, X2):
-    """
-    Compute the maximum principal angle (in degrees) between two subspaces spanned by columns of X1 and X2.
-    Uses the largest angle between the subspaces spanned by the columns of X1 and X2.
-    """
     angles = subspace_angles(X1, X2)
     return np.degrees(np.max(angles)) if angles.size > 0 else 0.0
 
 def spectrum_diff(evals1, evals2):
-    """
-    Compute the maximum absolute difference between two sets of eigenvalues.
-    If the lengths differ, the shorter list is zero-padded.
-    """
     n = max(len(evals1), len(evals2))
     e1 = np.pad(evals1, (0, n - len(evals1)), 'constant', constant_values=0)
     e2 = np.pad(evals2, (0, n - len(evals2)), 'constant', constant_values=0)
@@ -292,22 +271,6 @@ def spectrum_diff(evals1, evals2):
 
 def analyze_perturbations(all_data, perturb_func, func_name="custom", num_nodes_per_cluster=3,
                           keep=2, n_trials=5, angle_threshold=10, perturb_kwargs=None):
-    """
-    Run perturbation analysis on a collection of graph data using a given perturbation function.
-
-    Parameters:
-    - all_data: list of data dicts, each containing at least 'graph', 'lap_results' (with 'labels'), 'sig_results' (with 'labels'),
-                'all_chains' (contracted edges), and optionally 'edge_weights', 'alpha', 'beta'.
-    - perturb_func: function to apply for perturbation (one of the perturbation functions defined above).
-    - func_name: a label for the perturbation function (for display purposes).
-    - num_nodes_per_cluster, keep: parameters used by some perturbation methods (e.g., weighted imbalance).
-    - n_trials: number of random trials to run for each graph (for methods with randomness).
-    - angle_threshold: threshold (in degrees) to count significant changes (not used explicitly, could be for filtering results).
-    - perturb_kwargs: additional keyword arguments to pass to the perturbation function.
-
-    Returns:
-    - results: a list of dictionaries with keys 'graph_idx', 'trial', 'angle', 'spectrum_diff', 'func_type', 'nodes_perturbed'.
-    """
     if perturb_kwargs is None:
         perturb_kwargs = {}
     results = []
@@ -344,12 +307,10 @@ def analyze_perturbations(all_data, perturb_func, func_name="custom", num_nodes_
             if perturb_func == random_edge_perturbation or func_name == "random":
                 perturb_kwargs.setdefault("fraction", 0.1)
                 perturb_kwargs.setdefault("min_deg", 1)
-            # apply the perturbation function to get a perturbed graph
+            # apply the perturbation fct
             Gp = perturb_func(G, **perturb_kwargs)
             # contract the perturbed graph (if using contraction, otherwise skip)
-            # note: full_contraction_ham should be defined in the 'contraction' module
-            # Gp_contr, _ = full_contraction_ham(Gp)
-            # for now, assume Gp_contr is same as Gp if contraction function is not available
+            # Gp_contr, _ = full_contraction_ham(Gp) add later
             Gp_contr = Gp
             # compute spectral subspaces for original and perturbed graphs
             k = max(2, len(set(lap_labels.values())))
@@ -363,11 +324,6 @@ def analyze_perturbations(all_data, perturb_func, func_name="custom", num_nodes_
             filtered_sig_labels = {n: sig_labels[n] for n in Gp_contr.nodes() if n in sig_labels}
             lap_res_plot = dict(data.get("lap_results", data.get("laplacian", {})), labels=filtered_lap_labels)
             sig_res_plot = dict(data.get("sig_results", data.get("signless", {})), labels=filtered_sig_labels)
-            # visualization (if needed)
-            # draw_dual_colored_graph(Gp_contr, lap_res_plot, sig_res_plot,
-            #                         alpha=alpha, beta=beta, shortcuts=all_chains,
-            #                         title=f"perturbed {idx} ({func_name}), trial {trial} | θ={angle:.2f}°, Δλ={delta_spec:.4f}")
-            # log results
             results.append({
                 "graph_idx": idx,
                 "trial": trial,
