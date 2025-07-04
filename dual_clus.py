@@ -4,35 +4,33 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 
 def compute_edge_agreement_weights(G, lap_res, signless_res, alpha=0.5, beta=0.5):
-    """
-    assign edge weights based on agreement between laplacian and signless clusters.
-    edge weight is a linear combination of agreement in laplacian (w_lap) and signless (w_sign).
-    negative weight (-0.2) if nodes disagree in both clusterings.
-    """
     lap_labels = lap_res['labels']
     sig_labels = signless_res['labels']
     memberships = signless_res.get('memberships')
     edge_weights = {}
 
+    node_list = list(G.nodes())
+    node_to_idx = {n: i for i, n in enumerate(node_list)}
+
     if memberships is not None:
-        node_list = list(G.nodes())
-        node_to_idx = {node: i for i, node in enumerate(node_list)}
+        if isinstance(memberships, dict):
+            memberships_arr = np.array([memberships[n] for n in node_list])
+        else:
+            memberships_arr = memberships  # assumes memberships already matches node_list order
+    else:
+        memberships_arr = None
 
     for u, v in G.edges():
         w_lap = 1 if lap_labels[u] == lap_labels[v] else 0
-        if memberships is not None:
+        if memberships_arr is not None:
             i_u = node_to_idx[u]
             i_v = node_to_idx[v]
-            p_u = memberships[i_u]
-            p_v = memberships[i_v]
-            w_sign = np.dot(p_u, p_v)
+            w_sign = np.dot(memberships_arr[i_u], memberships_arr[i_v])
         else:
             w_sign = 1 if sig_labels[u] == sig_labels[v] else 0
-        if w_lap == 0 and w_sign == 0:
-            edge_weights[(u, v)] = -0.2
-        else:
-            edge_weights[(u, v)] = alpha * w_lap + beta * w_sign
+        edge_weights[(u, v)] = -0.2 if (w_lap == 0 and w_sign == 0) else (alpha * w_lap + beta * w_sign)
     return edge_weights
+
 
 def build_layout(G, lap_res, signless_res, alpha=0.5, beta=0.5, seed=42):
     """
