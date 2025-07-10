@@ -301,6 +301,7 @@ def signless_laplacian_clustering_pipeline(
         G, k_frac=k_frac, smooth=smooth, min_sil=min_sil, prominence=prominence
     )
     k = best['k'] if best and best.get('k', None) else None
+    print(f"k:{k}")
     if k and k >= 1:
         X = normalize(evecs[:, :k])
         km = KMeans(n_clusters=k, n_init=10, random_state=42).fit(X)
